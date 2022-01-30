@@ -26,7 +26,7 @@ isValidItemArr r = length r == 9 && maximumOccurances rowOccurances <= 1 && vali
     where rowOccurances = numbersOccurences r
 
 isValidBoard :: Sudoku -> Bool
-isValidBoard sudoku = length sudoku == 9 && all isValidItemArr sudoku && all isValidItemArr (columns sudoku [])
+isValidBoard sudoku = length sudoku == 9 && all isValidItemArr sudoku && all isValidItemArr (columns sudoku []) && all isValidItemArr (boxes sudoku [])
 
 emptyNumberOccurences :: [(Int, Int)]
 emptyNumberOccurences = [(1, 0), (2, 0), (3, 0), (4, 0), (5, 0), (6, 0), (7, 0), (8, 0), (9, 0)]
@@ -43,11 +43,21 @@ updateOccurances occ item = if null filteredArr then occ else (fst(head filtered
 numbersOccurences :: [Item] -> [(Int, Int)]
 numbersOccurences = foldl updateOccurances emptyNumberOccurences
 
-columns :: Sudoku -> [Row] -> [Row]
-columns sudoku cols = if length (head sudoku) <= 1 then column:cols else columns nextIterBoard (column:cols)
+columns :: Sudoku -> [[Item]] -> [[Item]]
+columns sudoku cols = if length (head sudoku) <= 1 then cols ++ [column] else columns nextIterBoard (cols ++ [column])
     where
         nextIterBoard = map (\(r:rs) -> rs) sudoku
         column = map (\(r:rs) -> r) sudoku
+
+rowsToBoxes :: Row -> Row -> Row -> [[Item]]
+rowsToBoxes [i11, i12, i13, i14, i15, i16, i17, i18, i19] [i21, i22, i23, i24, i25, i26, i27, i28, i29] [i31, i32, i33, i34, i35, i36, i37, i38, i39] = 
+    [[i11, i12, i13, i21, i22, i23, i31, i32, i33], [i14, i15, i16, i24, i25, i26, i34, i35, i36], [i17, i18, i19, i27, i28, i29, i37, i38, i39]]
+rowsToBoxes r1 r2 r3 = []
+
+boxes :: Sudoku -> [[Item]] -> [[Item]]
+boxes [] bxs = bxs
+boxes (r1:r2:r3:rs) bxs = boxes rs (bxs ++ rowsToBoxes r1 r2 r3)
+boxes s bxs = []
 
 printRow :: Row -> IO ()
 printRow [] = do
@@ -66,25 +76,34 @@ printSudoku (r:rs) = do
     printSudoku rs
 
 solveAndPrint :: Sudoku -> IO ()
-solveAndPrint sudoku = do 
+solveAndPrint sudoku = do
     putStrLn ""
     putStrLn "Board is valid! Solving..."
     putStrLn ""
     printSudoku sudoku
 
+isValueItem :: Item -> Bool
+isValueItem Empty = False
+isValueItem (Value _) = True
 
-loadSudoku :: Int -> Sudoku -> IO ()
-loadSudoku 0 sudoku = do
+isSolvedRow :: Row -> Bool
+isSolvedRow = all isValueItem
+
+isSolved :: Sudoku -> Bool 
+isSolved = all isSolvedRow
+
+loadAndSolveSudoku :: Int -> Sudoku -> IO ()
+loadAndSolveSudoku 0 sudoku = do
     putStrLn ""
     putStrLn "Board loaded successfully!"
     if isValidBoard sudoku then solveAndPrint sudoku else putStrLn "Invalid board"
-loadSudoku 9 sudoku = do
+loadAndSolveSudoku 9 sudoku = do
     putStrLn "Please enter the board below:"
     row <- getLine
-    loadSudoku 8 (sudoku ++ [stringToRow row])
-loadSudoku n sudoku = do
+    loadAndSolveSudoku 8 (sudoku ++ [stringToRow row])
+loadAndSolveSudoku n sudoku = do
     row <- getLine
-    loadSudoku (n - 1) (sudoku ++ [stringToRow row])
+    loadAndSolveSudoku (n - 1) (sudoku ++ [stringToRow row])
 
 main :: IO ()
-main = loadSudoku 9 []
+main = loadAndSolveSudoku 9 []
