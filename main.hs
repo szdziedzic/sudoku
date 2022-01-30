@@ -50,7 +50,7 @@ columns sudoku cols = if length (head sudoku) <= 1 then cols ++ [column] else co
         column = map (\(r:rs) -> r) sudoku
 
 rowsToBoxes :: Row -> Row -> Row -> [[Item]]
-rowsToBoxes [i11, i12, i13, i14, i15, i16, i17, i18, i19] [i21, i22, i23, i24, i25, i26, i27, i28, i29] [i31, i32, i33, i34, i35, i36, i37, i38, i39] = 
+rowsToBoxes [i11, i12, i13, i14, i15, i16, i17, i18, i19] [i21, i22, i23, i24, i25, i26, i27, i28, i29] [i31, i32, i33, i34, i35, i36, i37, i38, i39] =
     [[i11, i12, i13, i21, i22, i23, i31, i32, i33], [i14, i15, i16, i24, i25, i26, i34, i35, i36], [i17, i18, i19, i27, i28, i29, i37, i38, i39]]
 rowsToBoxes r1 r2 r3 = []
 
@@ -77,10 +77,14 @@ printSudoku (r:rs) = do
 
 solveAndPrint :: Sudoku -> IO ()
 solveAndPrint sudoku = do
+    print sudoku
     putStrLn ""
     putStrLn "Board is valid! Solving..."
     putStrLn ""
-    printSudoku sudoku
+    if null solution then  putStrLn "No solutions exist for this board!" else putStrLn "Solved successfully!"
+    putStrLn ""
+    printSudoku solution
+    where solution = solve sudoku
 
 isValueItem :: Item -> Bool
 isValueItem Empty = False
@@ -89,8 +93,33 @@ isValueItem (Value _) = True
 isSolvedRow :: Row -> Bool
 isSolvedRow = all isValueItem
 
-isSolved :: Sudoku -> Bool 
+isSolved :: Sudoku -> Bool
 isSolved = all isSolvedRow
+
+hasEmptyCells :: Row -> Bool
+hasEmptyCells = foldr ((||) . not . isValueItem) False
+
+replaceFirstEmptyInRow :: Row -> Int -> Row
+replaceFirstEmptyInRow [] n = []
+replaceFirstEmptyInRow (Empty:is) n = Value n : is
+replaceFirstEmptyInRow (i:is) n = i : replaceFirstEmptyInRow is n
+
+replaceFirstEmpty :: Sudoku -> Int -> Sudoku
+replaceFirstEmpty [] n = []
+replaceFirstEmpty (r:rs) n = if hasEmptyCells r then replaceFirstEmptyInRow r n : rs else r : replaceFirstEmpty rs n
+
+tryNewValue :: Sudoku -> Int -> Sudoku
+tryNewValue sudoku 10 = []
+tryNewValue sudoku n = if isValidBoard potentialBoard && not (null solution) then solution else tryNewValue sudoku (n + 1)
+    where potentialBoard = replaceFirstEmpty sudoku n
+          solution = solve potentialBoard
+
+solve :: Sudoku -> Sudoku
+solve sudoku | isSolved sudoku = sudoku
+             | null newLegalTry = []
+             | otherwise = newLegalTry
+             where
+                newLegalTry = tryNewValue sudoku 1
 
 loadAndSolveSudoku :: Int -> Sudoku -> IO ()
 loadAndSolveSudoku 0 sudoku = do
