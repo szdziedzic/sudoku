@@ -1,5 +1,7 @@
 data Item = Value Int | Empty deriving Show
 type Row = [Item]
+type Col = [Item]
+type Box = [Item]
 type Sudoku = [Row]
 
 charToItem :: Char -> Item
@@ -11,37 +13,30 @@ stringToRow = map charToItem
 stringsToSudoku :: [String] -> Sudoku
 stringsToSudoku = map stringToRow
 
-maximumOccurances :: [(Int, Int)] -> Int
-maximumOccurances [] = 0
-maximumOccurances (o:os) = if snd o > m then snd o else m
-    where m =  maximumOccurances os
-
 validValues :: [Item] -> Bool
 validValues [] = True
 validValues (Empty:is) = validValues is
 validValues ((Value v):is) = not (v <= 0 || v > 9) && validValues is
 
 isValidItemArr :: [Item] -> Bool
-isValidItemArr r = length r == 9 && maximumOccurances rowOccurances <= 1 && validValues r
-    where rowOccurances = numbersOccurences r
+isValidItemArr r = length r == 9 && maxRowOccurances r 0 0 0 0 0 0 0 0 0 <= 1 && validValues r
+
+maxRowOccurances :: Row -> Int -> Int -> Int -> Int -> Int -> Int -> Int -> Int -> Int -> Int
+maxRowOccurances [] n1 n2 n3 n4 n5 n6 n7 n8 n9 = maximum [n1, n2, n3, n4, n5, n6, n7, n8, n9]
+maxRowOccurances ((Value v):is) n1 n2 n3 n4 n5 n6 n7 n8 n9
+    | v == 1 = maxRowOccurances is (n1 + 1) n2 n3 n4 n5 n6 n7 n8 n9
+    | v == 2 = maxRowOccurances is n1 (n2 + 1) n3 n4 n5 n6 n7 n8 n9
+    | v == 3 = maxRowOccurances is n1 n2 (n3 + 1) n4 n5 n6 n7 n8 n9
+    | v == 4 = maxRowOccurances is n1 n2 n3 (n4 + 1) n5 n6 n7 n8 n9
+    | v == 5 = maxRowOccurances is n1 n2 n3 n4 (n5 + 1) n6 n7 n8 n9
+    | v == 6 = maxRowOccurances is n1 n2 n3 n4 n5 (n6 + 1) n7 n8 n9
+    | v == 7 = maxRowOccurances is n1 n2 n3 n4 n5 n6 (n7 + 1) n8 n9
+    | v == 8 = maxRowOccurances is n1 n2 n3 n4 n5 n6 n7 (n8 + 1) n9
+    | otherwise  = maxRowOccurances is n1 n2 n3 n4 n5 n6 n7 n8 (n9 + 1)
+maxRowOccurances (Empty:is) n1 n2 n3 n4 n5 n6 n7 n8 n9 = maxRowOccurances is n1 n2 n3 n4 n5 n6 n7 n8 n9
 
 isValidBoard :: Sudoku -> Bool
 isValidBoard sudoku = length sudoku == 9 && all isValidItemArr sudoku && all isValidItemArr (columns sudoku []) && all isValidItemArr (boxes sudoku [])
-
-emptyNumberOccurences :: [(Int, Int)]
-emptyNumberOccurences = [(1, 0), (2, 0), (3, 0), (4, 0), (5, 0), (6, 0), (7, 0), (8, 0), (9, 0)]
-
-itemValue :: Item -> Int
-itemValue Empty = 0
-itemValue (Value v) = v
-
-updateOccurances :: [(Int, Int)] -> Item -> [(Int, Int)]
-updateOccurances occ item = if null filteredArr then occ else (fst(head filteredArr), snd(head filteredArr) + 1) : filter (\(n, q) -> n /= itemValue item) occ
-    where
-        filteredArr = filter (\(n, q) -> n == itemValue item) occ
-
-numbersOccurences :: [Item] -> [(Int, Int)]
-numbersOccurences = foldl updateOccurances emptyNumberOccurences
 
 columns :: Sudoku -> [[Item]] -> [[Item]]
 columns sudoku cols = if length (head sudoku) <= 1 then cols ++ [column] else columns nextIterBoard (cols ++ [column])
@@ -99,27 +94,44 @@ isSolved = all isSolvedRow
 hasEmptyCells :: Row -> Bool
 hasEmptyCells = foldr ((||) . not . isValueItem) False
 
-replaceFirstEmptyInRow :: Row -> Int -> Row
-replaceFirstEmptyInRow [] n = []
-replaceFirstEmptyInRow (Empty:is) n = Value n : is
-replaceFirstEmptyInRow (i:is) n = i : replaceFirstEmptyInRow is n
+itemArrValues :: [Item] -> [Int]
+itemArrValues [] = []
+itemArrValues (Empty:is) = itemArrValues is
+itemArrValues ((Value v):is) = v:itemArrValues is
 
-replaceFirstEmpty :: Sudoku -> Int -> Sudoku
-replaceFirstEmpty [] n = []
-replaceFirstEmpty (r:rs) n = if hasEmptyCells r then replaceFirstEmptyInRow r n : rs else r : replaceFirstEmpty rs n
+numsLegalInItemArr :: Row -> Col -> Box -> [Int]
+numsLegalInItemArr row col box = filter (\num -> num `notElem` rowVals && num `notElem` colVals && num `notElem` boxVals) [1..9]
+    where 
+        rowVals = itemArrValues row
+        colVals = itemArrValues col
+        boxVals = itemArrValues box
 
-tryNewValue :: Sudoku -> Int -> Sudoku
-tryNewValue sudoku 10 = []
-tryNewValue sudoku n = if isValidBoard potentialBoard && not (null solution) then solution else tryNewValue sudoku (n + 1)
-    where potentialBoard = replaceFirstEmpty sudoku n
-          solution = solve potentialBoard
+replaceFirstEmptyInRowLegalCombinations :: Row -> [Item] -> Int -> [Col] -> [Box] -> Int -> Row -> [Row]
+replaceFirstEmptyInRowLegalCombinations [] prevItems colInd cols bxs rowInd r = []
+replaceFirstEmptyInRowLegalCombinations (Empty:is) prevItems colInd cols bxs rowInd r = map (\val -> prevItems ++ Value val : is) legalValues
+    where
+        col = last(take colInd cols)
+        box = last(take (((rowInd - 1) `div` 3) * 3 + ((colInd - 1) `div` 3) + 1) bxs)
+        legalValues = numsLegalInItemArr r col box
+replaceFirstEmptyInRowLegalCombinations (i:is) prevItems colInd cols bxs rowInd r = replaceFirstEmptyInRowLegalCombinations is (prevItems ++ [i]) (colInd + 1) cols bxs rowInd r
+
+replaceFirstEmptyLegalCombinations :: Sudoku -> [Row] -> Int -> [Col] -> [Box] -> [Sudoku]
+replaceFirstEmptyLegalCombinations [] prevRows rowInd cols bxs = []
+replaceFirstEmptyLegalCombinations (r:rs) prevRows rowInd cols bxs = if hasEmptyCells r then map (\r -> prevRows ++ r : rs) (replaceFirstEmptyInRowLegalCombinations r [] 1 cols bxs rowInd r) else replaceFirstEmptyLegalCombinations rs (prevRows ++ [r]) (rowInd + 1) cols bxs
+
+tryNewLegalCombination :: [Sudoku] -> Sudoku
+tryNewLegalCombination [] = []
+tryNewLegalCombination (c:cs) = if null sol then tryNewLegalCombination cs else sol
+    where
+        sol = solve c
 
 solve :: Sudoku -> Sudoku
 solve sudoku | isSolved sudoku = sudoku
-             | null newLegalTry = []
-             | otherwise = newLegalTry
+             | otherwise = tryNewLegalCombination allNewCombinations
              where
-                newLegalTry = tryNewValue sudoku 1
+                allNewCombinations = replaceFirstEmptyLegalCombinations sudoku [] 1 cols bxs
+                cols = columns sudoku []
+                bxs = boxes sudoku []
 
 loadAndSolveSudoku :: Int -> Sudoku -> IO ()
 loadAndSolveSudoku 0 sudoku = do
@@ -129,10 +141,10 @@ loadAndSolveSudoku 0 sudoku = do
 loadAndSolveSudoku 9 sudoku = do
     putStrLn "Please enter the board below:"
     row <- getLine
-    loadAndSolveSudoku 8 (sudoku ++ [stringToRow row])
+    if length row == 9 then loadAndSolveSudoku 8 (sudoku ++ [stringToRow row]) else putStrLn "Invalid row length!"
 loadAndSolveSudoku n sudoku = do
     row <- getLine
-    loadAndSolveSudoku (n - 1) (sudoku ++ [stringToRow row])
+    if length row == 9 then loadAndSolveSudoku (n - 1) (sudoku ++ [stringToRow row]) else putStrLn "Invalid row length!"
 
 main :: IO ()
 main = loadAndSolveSudoku 9 []
